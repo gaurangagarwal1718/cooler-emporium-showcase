@@ -8,40 +8,43 @@ import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import ProductModal from "@/components/ProductModal";
 import MapSection from "@/components/MapSection";
-import { products, getProductById, Product } from "@/data/products";
+import { useStore, Product } from "@/hooks/useStore";
 
 const Index = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const { products, categories, getCategoryById } = useStore();
+  
   const featuredProducts = products.slice(0, 6);
 
   const handleViewDetails = (id: string) => {
-    const product = getProductById(id);
+    const product = products.find(p => p.id === id);
     if (product) setSelectedProduct(product);
   };
 
-  const categories = [
-    {
-      title: "RO Purifiers",
-      description: "Advanced water purification systems for clean, safe drinking water.",
-      icon: <Droplet className="w-7 h-7 text-primary" />,
-      link: "/products?category=ro-purifier",
-      color: "bg-blue-50",
-    },
-    {
-      title: "Coolers",
-      description: "Energy-efficient air cooling for hot climates. Stay cool naturally.",
-      icon: <Wind className="w-7 h-7 text-primary" />,
-      link: "/products?category=cooler",
-      color: "bg-cyan-50",
-    },
-    {
-      title: "Fans",
-      description: "Premium ceiling, pedestal, and table fans for every space.",
-      icon: <Fan className="w-7 h-7 text-primary" />,
-      link: "/products?category=fans",
-      color: "bg-indigo-50",
-    },
-  ];
+  // Map categories from store to display cards
+  const categoryCards = categories.map((cat) => {
+    let icon;
+    switch (cat.slug) {
+      case "ro-purifier":
+        icon = <Droplet className="w-7 h-7 text-primary" />;
+        break;
+      case "cooler":
+        icon = <Wind className="w-7 h-7 text-primary" />;
+        break;
+      case "fans":
+        icon = <Fan className="w-7 h-7 text-primary" />;
+        break;
+      default:
+        icon = <Droplet className="w-7 h-7 text-primary" />;
+    }
+    return {
+      title: cat.name,
+      description: cat.description,
+      icon,
+      link: `/products?category=${cat.slug}`,
+      color: cat.slug === "ro-purifier" ? "bg-blue-50" : cat.slug === "cooler" ? "bg-cyan-50" : "bg-indigo-50",
+    };
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -90,7 +93,7 @@ const Index = () => {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {categories.map((cat, index) => (
+            {categoryCards.map((cat, index) => (
               <div key={cat.title} className="animate-fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
                 <CategoryCard {...cat} />
               </div>
@@ -119,11 +122,24 @@ const Index = () => {
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredProducts.map((product, index) => (
-              <div key={product.id} style={{ animationDelay: `${index * 0.1}s` }}>
-                <ProductCard {...product} onViewDetails={handleViewDetails} />
-              </div>
-            ))}
+            {featuredProducts.map((product, index) => {
+              const category = getCategoryById(product.categoryId);
+              return (
+                <div key={product.id} style={{ animationDelay: `${index * 0.1}s` }}>
+                  <ProductCard 
+                    id={product.id}
+                    name={product.name}
+                    description={product.description}
+                    category={category?.slug || "uncategorized"}
+                    image={product.images[0] || "/placeholder.svg"}
+                    price={product.price}
+                    inStock={product.inStock}
+                    features={product.features}
+                    onViewDetails={handleViewDetails} 
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -165,7 +181,16 @@ const Index = () => {
       {/* Product Modal */}
       {selectedProduct && (
         <ProductModal
-          product={selectedProduct}
+          product={{
+            id: selectedProduct.id,
+            name: selectedProduct.name,
+            description: selectedProduct.description,
+            category: getCategoryById(selectedProduct.categoryId)?.slug || "uncategorized",
+            image: selectedProduct.images[0] || "/placeholder.svg",
+            price: selectedProduct.price,
+            inStock: selectedProduct.inStock,
+            features: selectedProduct.features
+          }}
           isOpen={!!selectedProduct}
           onClose={() => setSelectedProduct(null)}
         />

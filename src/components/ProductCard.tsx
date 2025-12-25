@@ -6,20 +6,21 @@ interface ProductCardProps {
   id: string;
   name: string;
   description: string;
-  category: "ro-purifier" | "cooler" | "fans";
+  category: string;
   image: string;
   price?: number;
   inStock: boolean;
+  features?: string[];
   onViewDetails?: (id: string) => void;
 }
 
-const categoryLabels = {
-  "ro-purifier": "RO Purifier",
-  "cooler": "Cooler",
-  "fans": "Fan",
-};
-
 const ProductCard = ({ id, name, description, category, image, price, inStock, onViewDetails }: ProductCardProps) => {
+  // Format category for display
+  const displayCategory = category
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
   return (
     <div className="group bg-card rounded-xl overflow-hidden card-shadow transition-smooth hover:card-shadow-hover animate-scale-in">
       {/* Image */}
@@ -33,7 +34,7 @@ const ProductCard = ({ id, name, description, category, image, price, inStock, o
           variant="secondary" 
           className="absolute top-3 left-3 bg-secondary text-accent-foreground"
         >
-          {categoryLabels[category]}
+          {displayCategory}
         </Badge>
         {!inStock && (
           <div className="absolute inset-0 bg-foreground/50 flex items-center justify-center">

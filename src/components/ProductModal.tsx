@@ -1,22 +1,32 @@
 import { X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Product } from "@/data/products";
+
+interface ProductModalProduct {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  image: string;
+  price?: number;
+  inStock: boolean;
+  features: string[];
+}
 
 interface ProductModalProps {
-  product: Product;
+  product: ProductModalProduct;
   isOpen: boolean;
   onClose: () => void;
 }
 
-const categoryLabels = {
-  "ro-purifier": "RO Purifier",
-  "cooler": "Cooler",
-  "fans": "Fan",
-};
-
 const ProductModal = ({ product, isOpen, onClose }: ProductModalProps) => {
   if (!isOpen) return null;
+
+  // Format category for display
+  const displayCategory = product.category
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -49,7 +59,7 @@ const ProductModal = ({ product, isOpen, onClose }: ProductModalProps) => {
         <div className="p-6 md:p-8">
           <div className="flex items-center gap-3 mb-4">
             <Badge variant="secondary" className="bg-secondary text-accent-foreground">
-              {categoryLabels[product.category]}
+              {displayCategory}
             </Badge>
             {product.inStock ? (
               <Badge className="bg-green-100 text-green-700 hover:bg-green-100">In Stock</Badge>
@@ -73,17 +83,19 @@ const ProductModal = ({ product, isOpen, onClose }: ProductModalProps) => {
           )}
 
           {/* Features */}
-          <div className="mb-6">
-            <h3 className="font-semibold text-foreground mb-3">Key Features</h3>
-            <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {product.features.map((feature, index) => (
-                <li key={index} className="flex items-center gap-2 text-muted-foreground">
-                  <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {product.features && product.features.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-foreground mb-3">Key Features</h3>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {product.features.map((feature, index) => (
+                  <li key={index} className="flex items-center gap-2 text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <Button size="lg" className="w-full button-shadow">
             Visit Store for Purchase
