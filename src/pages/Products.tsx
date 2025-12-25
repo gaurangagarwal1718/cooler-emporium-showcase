@@ -7,37 +7,39 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import ProductModal from "@/components/ProductModal";
-import { products, getProductById, Product } from "@/data/products";
-
-type CategoryFilter = "all" | "ro-purifier" | "cooler" | "fans";
-
-const categoryLabels: Record<CategoryFilter, string> = {
-  all: "All Products",
-  "ro-purifier": "RO Purifiers",
-  cooler: "Coolers",
-  fans: "Fans",
-};
+import { useStore, Product } from "@/hooks/useStore";
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
+
+  const { categories, products, getCategoryById, getProductById } = useStore();
+
+  // Build category labels dynamically
+  const categoryLabels: Record<string, string> = {
+    all: "All Products",
+    ...Object.fromEntries(categories.map(c => [c.id, c.name]))
+  };
 
   // Sync category from URL
   useEffect(() => {
-    const category = searchParams.get("category") as CategoryFilter;
-    if (category && Object.keys(categoryLabels).includes(category)) {
-      setActiveCategory(category);
+    const category = searchParams.get("category");
+    if (category && (category === "all" || categories.some(c => c.id === category || c.slug === category))) {
+      // Find by slug or id
+      const found = categories.find(c => c.slug === category || c.id === category);
+      setActiveCategory(found ? found.id : "all");
     }
-  }, [searchParams]);
+  }, [searchParams, categories]);
 
-  const handleCategoryChange = (category: CategoryFilter) => {
-    setActiveCategory(category);
-    if (category === "all") {
+  const handleCategoryChange = (categoryId: string) => {
+    setActiveCategory(categoryId);
+    if (categoryId === "all") {
       searchParams.delete("category");
     } else {
-      searchParams.set("category", category);
+      const category = getCategoryById(categoryId);
+      searchParams.set("category", category?.slug || categoryId);
     }
     setSearchParams(searchParams);
   };
@@ -48,7 +50,7 @@ const Products = () => {
   };
 
   const filteredProducts = products.filter((product) => {
-    const matchesCategory = activeCategory === "all" || product.category === activeCategory;
+    const matchesCategory = activeCategory === "all" || product.categoryId === activeCategory;
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          product.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
@@ -77,15 +79,23 @@ const Products = () => {
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
             {/* Category Filters */}
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(categoryLabels) as CategoryFilter[]).map((category) => (
+              <Button
+                variant={activeCategory === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleCategoryChange("all")}
+                className={activeCategory === "all" ? "button-shadow" : ""}
+              >
+                All Products
+              </Button>
+              {categories.map((category) => (
                 <Button
-                  key={category}
-                  variant={activeCategory === category ? "default" : "outline"}
+                  key={category.id}
+                  variant={activeCategory === category.id ? "default" : "outline"}
                   size="sm"
-                  onClick={() => handleCategoryChange(category)}
-                  className={activeCategory === category ? "button-shadow" : ""}
+                  onClick={() => handleCategoryChange(category.id)}
+                  className={activeCategory === category.id ? "button-shadow" : ""}
                 >
-                  {categoryLabels[category]}
+                  {category.icon} {category.name}
                 </Button>
               ))}
             </div>
@@ -118,11 +128,24 @@ const Products = () => {
 
           {filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProducts.map((product, index) => (
-                <div key={product.id} style={{ animationDelay: `${index * 0.05}s` }}>
-                  <ProductCard {...product} onViewDetails={handleViewDetails} />
-                </div>
-              ))}
+              {filteredProducts.map((product, index) => {
+                const category = getCategoryById(product.categoryId);
+                return (
+                  <div key={product.id} style={{ animationDelay: `${index * 0.05}s` }}>
+                    <ProductCard 
+                      id={product.id}
+                      name={product.name}
+                      description={product.description}
+                      category={category?.slug || "uncategorized"}
+                      image={product.images[0] || "/placeholder.svg"}
+                      price={product.price}
+                      inStock={product.inStock}
+                      features={product.features}
+                      onViewDetails={handleViewDetails} 
+                    />
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-16">
@@ -145,7 +168,16 @@ const Products = () => {
       {/* Product Modal */}
       {selectedProduct && (
         <ProductModal
-          product={selectedProduct}
+          product={{
+            id: selectedProduct.id,
+            name: selectedProduct.name,
+            description: selectedProduct.description,
+            category: getCategoryById(selectedProduct.categoryId)?.slug || "uncategorized",
+            image: selectedProduct.images[0] || "/placeholder.svg",
+            price: selectedProduct.price,
+            inStock: selectedProduct.inStock,
+            features: selectedProduct.features
+          }}
           isOpen={!!selectedProduct}
           onClose={() => setSelectedProduct(null)}
         />

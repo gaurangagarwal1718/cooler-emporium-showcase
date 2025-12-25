@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Droplets } from "lucide-react";
+import { Menu, X, Droplets, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
@@ -48,6 +48,12 @@ const Navbar = () => {
             <Button variant="default" size="sm" className="button-shadow" asChild>
               <Link to="/products">Shop Now</Link>
             </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/admin" className="gap-2">
+                <Settings className="w-4 h-4" />
+                Admin
+              </Link>
+            </Button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -78,9 +84,17 @@ const Navbar = () => {
                   {link.name}
                 </Link>
               ))}
-              <Button variant="default" size="sm" className="button-shadow w-fit" asChild>
-                <Link to="/products" onClick={() => setIsOpen(false)}>Shop Now</Link>
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button variant="default" size="sm" className="button-shadow w-fit" asChild>
+                  <Link to="/products" onClick={() => setIsOpen(false)}>Shop Now</Link>
+                </Button>
+                <Button variant="outline" size="sm" className="w-fit" asChild>
+                  <Link to="/admin" onClick={() => setIsOpen(false)} className="gap-2">
+                    <Settings className="w-4 h-4" />
+                    Admin
+                  </Link>
+                </Button>
+              </div>
             </div>
           </div>
         )}
