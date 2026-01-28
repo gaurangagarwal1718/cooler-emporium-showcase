@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { 
   Home, 
@@ -10,7 +10,18 @@ import {
   Pencil,
   Trash2,
   Search,
-  ChevronRight
+  ChevronDown,
+  ChevronRight,
+  DollarSign,
+  FileText,
+  Star,
+  Wrench,
+  Lightbulb,
+  ImageIcon,
+  Tags,
+  Eye,
+  Copy,
+  Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +61,46 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useStore, Category, Product } from "@/hooks/useStore";
 import { useToast } from "@/hooks/use-toast";
 import AdminLoginModal from "@/components/admin/AdminLoginModal";
+import { RichTextEditor } from "@/components/admin/RichTextEditor";
+import { FeatureListBuilder, ProductFeature } from "@/components/admin/FeatureListBuilder";
+import { SpecificationsBuilder, ProductSpecification } from "@/components/admin/SpecificationsBuilder";
+import { BenefitsBuilder, ProductBenefit } from "@/components/admin/BenefitsBuilder";
+import { ImageManager, ProductImage } from "@/components/admin/ImageManager";
+import { cn } from "@/lib/utils";
+
+interface ProductFormData {
+  name: string;
+  headline: string;
+  description: string;
+  categoryId: string;
+  mrp: string;
+  discountedPrice: string;
+  inStock: boolean;
+  isFeatured: boolean;
+  tags: string[];
+  productFeatures: ProductFeature[];
+  specifications: ProductSpecification[];
+  benefits: ProductBenefit[];
+  productImages: ProductImage[];
+}
+
+const initialProductForm: ProductFormData = {
+  name: "",
+  headline: "",
+  description: "",
+  categoryId: "",
+  mrp: "",
+  discountedPrice: "",
+  inStock: true,
+  isFeatured: false,
+  tags: [],
+  productFeatures: [],
+  specifications: [],
+  benefits: [],
+  productImages: [],
+};
+
+const availableTags = ["New Arrival", "Best Seller", "Limited Offer", "Premium", "Sale"];
 
 const Admin = () => {
   const { isAuthenticated, logout } = useAdminAuth();
@@ -72,23 +124,72 @@ const Admin = () => {
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
 
   // Product state
-  const [productForm, setProductForm] = useState({
-    name: "",
-    description: "",
-    categoryId: "",
-    images: "",
-    price: "",
-    inStock: true,
-    features: ""
-  });
+  const [productForm, setProductForm] = useState<ProductFormData>(initialProductForm);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editProductForm, setEditProductForm] = useState<ProductFormData>(initialProductForm);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [productSearch, setProductSearch] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
+  const [productStatusFilter, setProductStatusFilter] = useState("all");
+
+  // Collapsible sections state
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    basic: true,
+    pricing: true,
+    description: false,
+    features: false,
+    specifications: false,
+    benefits: false,
+    images: false,
+    status: false,
+  });
+
+  // Auto-save draft
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("cooler_emporium_product_draft");
+    if (saved) {
+      try {
+        const draft = JSON.parse(saved);
+        setProductForm(draft);
+        toast({ title: "Draft Restored", description: "Your previous draft has been restored." });
+      } catch (e) {
+        // Invalid draft
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (productForm.name || productForm.description) {
+      const timer = setTimeout(() => {
+        setIsSaving(true);
+        localStorage.setItem("cooler_emporium_product_draft", JSON.stringify(productForm));
+        setLastSaved(new Date());
+        setTimeout(() => setIsSaving(false), 500);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [productForm]);
 
   if (!isAuthenticated) {
     return <AdminLoginModal />;
   }
+
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Calculate discount percentage
+  const calculateDiscount = (mrp: string, discounted: string) => {
+    const mrpNum = parseFloat(mrp);
+    const discountedNum = parseFloat(discounted);
+    if (mrpNum && discountedNum && mrpNum > discountedNum) {
+      return Math.round(((mrpNum - discountedNum) / mrpNum) * 100);
+    }
+    return 0;
+  };
 
   // Category handlers
   const handleAddCategory = () => {
@@ -134,22 +235,88 @@ const Admin = () => {
       toast({ title: "Error", description: "Product name and category are required", variant: "destructive" });
       return;
     }
+    
+    const mrp = productForm.mrp ? parseFloat(productForm.mrp) : undefined;
+    const discountedPrice = productForm.discountedPrice ? parseFloat(productForm.discountedPrice) : undefined;
+    const discountPercentage = calculateDiscount(productForm.mrp, productForm.discountedPrice);
+
     addProduct({
       name: productForm.name,
+      headline: productForm.headline,
       description: productForm.description,
       categoryId: productForm.categoryId,
-      images: productForm.images.split(",").map(s => s.trim()).filter(Boolean),
-      price: productForm.price ? parseFloat(productForm.price) : undefined,
+      images: productForm.productImages.map(img => img.url),
+      productImages: productForm.productImages,
+      mrp,
+      discountedPrice,
+      discountPercentage,
+      price: discountedPrice || mrp,
       inStock: productForm.inStock,
-      features: productForm.features.split(",").map(s => s.trim()).filter(Boolean)
+      isFeatured: productForm.isFeatured,
+      features: productForm.productFeatures.map(f => f.title),
+      productFeatures: productForm.productFeatures,
+      specifications: productForm.specifications,
+      benefits: productForm.benefits,
+      tags: productForm.tags,
     });
-    setProductForm({ name: "", description: "", categoryId: "", images: "", price: "", inStock: true, features: "" });
+    
+    setProductForm(initialProductForm);
+    localStorage.removeItem("cooler_emporium_product_draft");
     toast({ title: "Success", description: "Product added successfully" });
+  };
+
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setEditProductForm({
+      name: product.name,
+      headline: product.headline || "",
+      description: product.description,
+      categoryId: product.categoryId,
+      mrp: product.mrp?.toString() || "",
+      discountedPrice: product.discountedPrice?.toString() || product.price?.toString() || "",
+      inStock: product.inStock,
+      isFeatured: product.isFeatured || false,
+      tags: product.tags || [],
+      productFeatures: product.productFeatures || [],
+      specifications: product.specifications || [],
+      benefits: product.benefits || [],
+      productImages: product.productImages || product.images.map((url, i) => ({
+        id: `img_${i}`,
+        url,
+        altText: "",
+        isPrimary: i === 0,
+        order: i + 1,
+      })),
+    });
   };
 
   const handleUpdateProduct = () => {
     if (!editingProduct) return;
-    updateProduct(editingProduct.id, editingProduct);
+    
+    const mrp = editProductForm.mrp ? parseFloat(editProductForm.mrp) : undefined;
+    const discountedPrice = editProductForm.discountedPrice ? parseFloat(editProductForm.discountedPrice) : undefined;
+    const discountPercentage = calculateDiscount(editProductForm.mrp, editProductForm.discountedPrice);
+
+    updateProduct(editingProduct.id, {
+      name: editProductForm.name,
+      headline: editProductForm.headline,
+      description: editProductForm.description,
+      categoryId: editProductForm.categoryId,
+      images: editProductForm.productImages.map(img => img.url),
+      productImages: editProductForm.productImages,
+      mrp,
+      discountedPrice,
+      discountPercentage,
+      price: discountedPrice || mrp,
+      inStock: editProductForm.inStock,
+      isFeatured: editProductForm.isFeatured,
+      features: editProductForm.productFeatures.map(f => f.title),
+      productFeatures: editProductForm.productFeatures,
+      specifications: editProductForm.specifications,
+      benefits: editProductForm.benefits,
+      tags: editProductForm.tags,
+    });
+    
     setEditingProduct(null);
     toast({ title: "Success", description: "Product updated successfully" });
   };
@@ -161,11 +328,98 @@ const Admin = () => {
     toast({ title: "Success", description: "Product deleted successfully" });
   };
 
+  const handleDuplicateProduct = (product: Product) => {
+    addProduct({
+      ...product,
+      name: `${product.name} (Copy)`,
+    });
+    toast({ title: "Success", description: "Product duplicated successfully" });
+  };
+
+  const toggleTag = (tag: string, isEdit = false) => {
+    if (isEdit) {
+      setEditProductForm(prev => ({
+        ...prev,
+        tags: prev.tags.includes(tag) 
+          ? prev.tags.filter(t => t !== tag)
+          : [...prev.tags, tag]
+      }));
+    } else {
+      setProductForm(prev => ({
+        ...prev,
+        tags: prev.tags.includes(tag) 
+          ? prev.tags.filter(t => t !== tag)
+          : [...prev.tags, tag]
+      }));
+    }
+  };
+
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(productSearch.toLowerCase());
     const matchesCategory = productCategoryFilter === "all" || p.categoryId === productCategoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesStatus = productStatusFilter === "all" || 
+      (productStatusFilter === "inStock" && p.inStock) ||
+      (productStatusFilter === "outOfStock" && !p.inStock) ||
+      (productStatusFilter === "featured" && p.isFeatured);
+    return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  const getSectionSummary = (section: string) => {
+    switch (section) {
+      case "features":
+        return productForm.productFeatures.length > 0 ? `${productForm.productFeatures.length} features` : "";
+      case "specifications":
+        return productForm.specifications.length > 0 ? `${productForm.specifications.length} specs` : "";
+      case "benefits":
+        return productForm.benefits.length > 0 ? `${productForm.benefits.length} benefits` : "";
+      case "images":
+        return productForm.productImages.length > 0 ? `${productForm.productImages.length} images` : "";
+      default:
+        return "";
+    }
+  };
+
+  const CollapsibleSection = ({ 
+    id, 
+    title, 
+    icon: Icon, 
+    children 
+  }: { 
+    id: string; 
+    title: string; 
+    icon: React.ComponentType<{ className?: string }>; 
+    children: React.ReactNode;
+  }) => (
+    <Collapsible open={openSections[id]} onOpenChange={() => toggleSection(id)}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Icon className="w-5 h-5 text-primary" />
+                {title}
+                {getSectionSummary(id) && (
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {getSectionSummary(id)}
+                  </Badge>
+                )}
+              </CardTitle>
+              {openSections[id] ? (
+                <ChevronDown className="w-5 h-5 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              )}
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            {children}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -177,6 +431,14 @@ const Admin = () => {
             <h1 className="text-xl font-bold text-foreground">Cooler Emporium - Admin Panel</h1>
           </div>
           <div className="flex items-center gap-2">
+            {isSaving && (
+              <span className="text-sm text-muted-foreground">Saving...</span>
+            )}
+            {lastSaved && !isSaving && (
+              <span className="text-xs text-muted-foreground">
+                Saved {lastSaved.toLocaleTimeString()}
+              </span>
+            )}
             <Button variant="outline" size="sm" asChild>
               <Link to="/"><Home className="w-4 h-4 mr-2" /> Back to Website</Link>
             </Button>
@@ -189,7 +451,7 @@ const Admin = () => {
 
       <main className="container mx-auto px-4 py-8">
         {/* Dashboard Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Categories</CardTitle>
@@ -211,7 +473,15 @@ const Admin = () => {
               <CardTitle className="text-sm font-medium text-muted-foreground">In Stock</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground">{products.filter(p => p.inStock).length}</div>
+              <div className="text-3xl font-bold text-green-600">{products.filter(p => p.inStock).length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Featured</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-primary">{products.filter(p => p.isFeatured).length}</div>
             </CardContent>
           </Card>
         </div>
@@ -323,22 +593,28 @@ const Admin = () => {
 
           {/* Products Tab */}
           <TabsContent value="products" className="space-y-6">
-            {/* Add Product Form */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Plus className="w-5 h-5" /> Add New Product
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            {/* Add Product Form - Collapsible Sections */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Plus className="w-5 h-5" /> Add New Product
+              </h2>
+
+              {/* Basic Information */}
+              <CollapsibleSection id="basic" title="Basic Information" icon={Package}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Product Name *</Label>
-                    <Input
-                      placeholder="Product name"
-                      value={productForm.name}
-                      onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                    />
+                    <div className="relative">
+                      <Input
+                        placeholder="e.g., Havells Albus UV Plus Water Purifier"
+                        value={productForm.name}
+                        onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                        maxLength={100}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                        {productForm.name.length}/100
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Category *</Label>
@@ -359,51 +635,167 @@ const Admin = () => {
                     </Select>
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label>Description</Label>
-                    <Textarea
-                      placeholder="Product description"
-                      value={productForm.description}
-                      onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Price (₹)</Label>
-                    <Input
-                      type="number"
-                      placeholder="e.g., 9999"
-                      value={productForm.price}
-                      onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Image URLs (comma-separated)</Label>
-                    <Input
-                      placeholder="https://example.com/image.jpg"
-                      value={productForm.images}
-                      onChange={(e) => setProductForm({ ...productForm, images: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Features (comma-separated)</Label>
-                    <Input
-                      placeholder="Feature 1, Feature 2, Feature 3"
-                      value={productForm.features}
-                      onChange={(e) => setProductForm({ ...productForm, features: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={productForm.inStock}
-                      onCheckedChange={(checked) => setProductForm({ ...productForm, inStock: checked })}
-                    />
-                    <Label>In Stock</Label>
+                    <Label>Product Headline/Tagline</Label>
+                    <div className="relative">
+                      <Input
+                        placeholder="e.g., Pure Water, Healthy Living"
+                        value={productForm.headline}
+                        onChange={(e) => setProductForm({ ...productForm, headline: e.target.value })}
+                        maxLength={150}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                        {productForm.headline.length}/150
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <Button className="mt-4" onClick={handleAddProduct}>
+              </CollapsibleSection>
+
+              {/* Pricing */}
+              <CollapsibleSection id="pricing" title="Pricing & Discounts" icon={DollarSign}>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>MRP (₹) *</Label>
+                    <Input
+                      type="number"
+                      placeholder="e.g., 15000"
+                      value={productForm.mrp}
+                      onChange={(e) => setProductForm({ ...productForm, mrp: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Discounted Price (₹)</Label>
+                    <Input
+                      type="number"
+                      placeholder="e.g., 9900"
+                      value={productForm.discountedPrice}
+                      onChange={(e) => setProductForm({ ...productForm, discountedPrice: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Discount</Label>
+                    <div className="h-10 flex items-center">
+                      {calculateDiscount(productForm.mrp, productForm.discountedPrice) > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-green-500 text-white">
+                            {calculateDiscount(productForm.mrp, productForm.discountedPrice)}% OFF
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            Save ₹{(parseFloat(productForm.mrp) - parseFloat(productForm.discountedPrice)).toLocaleString()}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No discount applied</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleSection>
+
+              {/* Description - Rich Text */}
+              <CollapsibleSection id="description" title="Product Description" icon={FileText}>
+                <RichTextEditor
+                  content={productForm.description}
+                  onChange={(content) => setProductForm({ ...productForm, description: content })}
+                  placeholder="Describe your product in detail. Highlight key features, benefits, and what makes it special..."
+                />
+              </CollapsibleSection>
+
+              {/* Features */}
+              <CollapsibleSection id="features" title="Product Features" icon={Star}>
+                <FeatureListBuilder
+                  features={productForm.productFeatures}
+                  onChange={(features) => setProductForm({ ...productForm, productFeatures: features })}
+                />
+              </CollapsibleSection>
+
+              {/* Technical Specifications */}
+              <CollapsibleSection id="specifications" title="Technical Specifications" icon={Wrench}>
+                <SpecificationsBuilder
+                  specifications={productForm.specifications}
+                  onChange={(specs) => setProductForm({ ...productForm, specifications: specs })}
+                />
+              </CollapsibleSection>
+
+              {/* Customer Benefits */}
+              <CollapsibleSection id="benefits" title="Customer Benefits" icon={Lightbulb}>
+                <BenefitsBuilder
+                  benefits={productForm.benefits}
+                  onChange={(benefits) => setProductForm({ ...productForm, benefits: benefits })}
+                />
+              </CollapsibleSection>
+
+              {/* Images */}
+              <CollapsibleSection id="images" title="Images & Media" icon={ImageIcon}>
+                <ImageManager
+                  images={productForm.productImages}
+                  onChange={(images) => setProductForm({ ...productForm, productImages: images })}
+                />
+              </CollapsibleSection>
+
+              {/* Status & Tags */}
+              <CollapsibleSection id="status" title="Status & Tags" icon={Tags}>
+                <div className="space-y-6">
+                  <div className="flex flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={productForm.inStock}
+                        onCheckedChange={(checked) => setProductForm({ ...productForm, inStock: checked })}
+                      />
+                      <Label className="flex items-center gap-2">
+                        In Stock
+                        <Badge variant={productForm.inStock ? "default" : "destructive"}>
+                          {productForm.inStock ? "Available" : "Out of Stock"}
+                        </Badge>
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={productForm.isFeatured}
+                        onCheckedChange={(checked) => setProductForm({ ...productForm, isFeatured: checked })}
+                      />
+                      <Label className="flex items-center gap-2">
+                        Featured Product
+                        {productForm.isFeatured && <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />}
+                      </Label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Product Tags</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {availableTags.map((tag) => (
+                        <Badge
+                          key={tag}
+                          variant={productForm.tags.includes(tag) ? "default" : "outline"}
+                          className="cursor-pointer"
+                          onClick={() => toggleTag(tag)}
+                        >
+                          {productForm.tags.includes(tag) && <Check className="w-3 h-3 mr-1" />}
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleSection>
+
+              {/* Submit Button */}
+              <div className="flex justify-end gap-2 sticky bottom-4 bg-background p-4 rounded-lg shadow-lg border border-border">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setProductForm(initialProductForm);
+                    localStorage.removeItem("cooler_emporium_product_draft");
+                  }}
+                >
+                  Clear Form
+                </Button>
+                <Button onClick={handleAddProduct} size="lg">
                   <Plus className="w-4 h-4 mr-2" /> Add Product
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Products List */}
             <Card>
@@ -413,7 +805,7 @@ const Admin = () => {
                     <CardTitle>Existing Products</CardTitle>
                     <CardDescription>{filteredProducts.length} products shown</CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
@@ -425,7 +817,7 @@ const Admin = () => {
                     </div>
                     <Select value={productCategoryFilter} onValueChange={setProductCategoryFilter}>
                       <SelectTrigger className="w-40">
-                        <SelectValue placeholder="Filter by category" />
+                        <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Categories</SelectItem>
@@ -434,6 +826,17 @@ const Admin = () => {
                             {cat.icon} {cat.name}
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="inStock">In Stock</SelectItem>
+                        <SelectItem value="outOfStock">Out of Stock</SelectItem>
+                        <SelectItem value="featured">Featured</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -454,26 +857,48 @@ const Admin = () => {
                           className="w-16 h-16 rounded-lg object-cover"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold text-foreground truncate">{product.name}</h3>
+                            {product.isFeatured && (
+                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                            )}
                             {!product.inStock && (
                               <Badge variant="destructive" className="text-xs">Out of Stock</Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <Badge variant="outline" className="text-xs">
                               {category?.icon} {category?.name || "Uncategorized"}
                             </Badge>
-                            {product.price && (
+                            {product.discountedPrice && product.mrp && product.discountedPrice < product.mrp ? (
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-semibold text-primary">₹{product.discountedPrice.toLocaleString()}</span>
+                                <span className="text-xs text-muted-foreground line-through">₹{product.mrp.toLocaleString()}</span>
+                                <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                                  {product.discountPercentage}% OFF
+                                </Badge>
+                              </div>
+                            ) : product.price ? (
                               <span className="text-sm text-muted-foreground">₹{product.price.toLocaleString()}</span>
-                            )}
+                            ) : null}
+                            {product.tags?.map((tag) => (
+                              <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                            ))}
                           </div>
                         </div>
                         <div className="flex gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setEditingProduct({ ...product })}
+                            onClick={() => handleDuplicateProduct(product)}
+                            title="Duplicate"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditProduct(product)}
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
@@ -541,72 +966,160 @@ const Admin = () => {
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Product</DialogTitle>
           </DialogHeader>
           {editingProduct && (
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-2">
-                <Label>Product Name</Label>
-                <Input
-                  value={editingProduct.name}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                />
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Product Name *</Label>
+                  <Input
+                    value={editProductForm.name}
+                    onChange={(e) => setEditProductForm({ ...editProductForm, name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select
+                    value={editProductForm.categoryId}
+                    onValueChange={(value) => setEditProductForm({ ...editProductForm, categoryId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.icon} {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Headline</Label>
+                  <Input
+                    value={editProductForm.headline}
+                    onChange={(e) => setEditProductForm({ ...editProductForm, headline: e.target.value })}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={editingProduct.categoryId}
-                  onValueChange={(value) => setEditingProduct({ ...editingProduct, categoryId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.icon} {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              {/* Pricing */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>MRP (₹)</Label>
+                  <Input
+                    type="number"
+                    value={editProductForm.mrp}
+                    onChange={(e) => setEditProductForm({ ...editProductForm, mrp: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Discounted Price (₹)</Label>
+                  <Input
+                    type="number"
+                    value={editProductForm.discountedPrice}
+                    onChange={(e) => setEditProductForm({ ...editProductForm, discountedPrice: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Discount</Label>
+                  <div className="h-10 flex items-center">
+                    {calculateDiscount(editProductForm.mrp, editProductForm.discountedPrice) > 0 ? (
+                      <Badge className="bg-green-500 text-white">
+                        {calculateDiscount(editProductForm.mrp, editProductForm.discountedPrice)}% OFF
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No discount</span>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {/* Description */}
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Textarea
-                  value={editingProduct.description}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                <RichTextEditor
+                  content={editProductForm.description}
+                  onChange={(content) => setEditProductForm({ ...editProductForm, description: content })}
+                  minHeight="200px"
                 />
               </div>
+
+              {/* Features */}
               <div className="space-y-2">
-                <Label>Price (₹)</Label>
-                <Input
-                  type="number"
-                  value={editingProduct.price || ""}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value ? parseFloat(e.target.value) : undefined })}
+                <Label>Features</Label>
+                <FeatureListBuilder
+                  features={editProductForm.productFeatures}
+                  onChange={(features) => setEditProductForm({ ...editProductForm, productFeatures: features })}
                 />
               </div>
+
+              {/* Specifications */}
               <div className="space-y-2">
-                <Label>Image URLs (comma-separated)</Label>
-                <Input
-                  value={editingProduct.images.join(", ")}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, images: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                <Label>Specifications</Label>
+                <SpecificationsBuilder
+                  specifications={editProductForm.specifications}
+                  onChange={(specs) => setEditProductForm({ ...editProductForm, specifications: specs })}
                 />
               </div>
+
+              {/* Benefits */}
               <div className="space-y-2">
-                <Label>Features (comma-separated)</Label>
-                <Input
-                  value={editingProduct.features.join(", ")}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, features: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                <Label>Benefits</Label>
+                <BenefitsBuilder
+                  benefits={editProductForm.benefits}
+                  onChange={(benefits) => setEditProductForm({ ...editProductForm, benefits: benefits })}
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={editingProduct.inStock}
-                  onCheckedChange={(checked) => setEditingProduct({ ...editingProduct, inStock: checked })}
+
+              {/* Images */}
+              <div className="space-y-2">
+                <Label>Images</Label>
+                <ImageManager
+                  images={editProductForm.productImages}
+                  onChange={(images) => setEditProductForm({ ...editProductForm, productImages: images })}
                 />
-                <Label>In Stock</Label>
+              </div>
+
+              {/* Status & Tags */}
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={editProductForm.inStock}
+                      onCheckedChange={(checked) => setEditProductForm({ ...editProductForm, inStock: checked })}
+                    />
+                    <Label>In Stock</Label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={editProductForm.isFeatured}
+                      onCheckedChange={(checked) => setEditProductForm({ ...editProductForm, isFeatured: checked })}
+                    />
+                    <Label>Featured</Label>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTags.map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant={editProductForm.tags.includes(tag) ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => toggleTag(tag, true)}
+                      >
+                        {editProductForm.tags.includes(tag) && <Check className="w-3 h-3 mr-1" />}
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
