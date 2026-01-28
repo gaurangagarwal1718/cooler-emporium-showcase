@@ -1,4 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { ProductFeature } from "@/components/admin/FeatureListBuilder";
+import { ProductSpecification } from "@/components/admin/SpecificationsBuilder";
+import { ProductBenefit } from "@/components/admin/BenefitsBuilder";
+import { ProductImage } from "@/components/admin/ImageManager";
 
 // Types
 export interface Category {
@@ -13,13 +17,24 @@ export interface Category {
 export interface Product {
   id: string;
   name: string;
+  headline?: string;
   description: string;
   categoryId: string;
   images: string[];
+  productImages?: ProductImage[];
   price?: number;
+  mrp?: number;
+  discountedPrice?: number;
+  discountPercentage?: number;
   inStock: boolean;
+  isFeatured?: boolean;
   features: string[];
+  productFeatures?: ProductFeature[];
+  specifications?: ProductSpecification[];
+  benefits?: ProductBenefit[];
+  tags?: string[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 interface StoreContextType {
@@ -74,12 +89,18 @@ const initialProducts: Product[] = [
   {
     id: "prod_10",
     name: "Havells Albus UV Plus Water Purifier",
+    headline: "Pure Water, Healthy Living",
     description: "Transform your drinking water into a source of pure health with advanced 4-stage UV purification and germicidal UV-C protection. Features iProtect monitoring that automatically stops water flow if unsafe, 6L stainless steel tank, and sleek black design. Perfect for modern Indian homes with TDS up to 2000 ppm.",
     categoryId: "cat_1",
     images: ["https://images.unsplash.com/photo-1624958723474-a7eb2a0c2ae0?w=800&auto=format&fit=crop"],
+    mrp: 15000,
+    discountedPrice: 9900,
+    discountPercentage: 34,
     price: 9900,
     inStock: true,
+    isFeatured: true,
     features: ["4-Stage RO+UV+UF Purification", "iProtect Safety Monitoring", "6L Stainless Steel Tank", "15L/Hour Flow Rate", "Free Installation & 1-Year Warranty"],
+    tags: ["Best Seller", "Limited Offer"],
     createdAt: new Date().toISOString(),
   },
   {
@@ -248,7 +269,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateProduct = (id: string, updates: Partial<Omit<Product, "id" | "createdAt">>) => {
     setProducts((prev) =>
-      prev.map((prod) => (prod.id === id ? { ...prod, ...updates } : prod))
+      prev.map((prod) => (prod.id === id ? { ...prod, ...updates, updatedAt: new Date().toISOString() } : prod))
     );
   };
 
