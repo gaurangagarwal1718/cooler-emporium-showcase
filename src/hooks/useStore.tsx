@@ -72,6 +72,17 @@ const initialCategories: Category[] = [
 
 const initialProducts: Product[] = [
   {
+    id: "prod_10",
+    name: "Havells Albus UV Plus Water Purifier",
+    description: "Transform your drinking water into a source of pure health with advanced 4-stage UV purification and germicidal UV-C protection. Features iProtect monitoring that automatically stops water flow if unsafe, 6L stainless steel tank, and sleek black design. Perfect for modern Indian homes with TDS up to 2000 ppm.",
+    categoryId: "cat_1",
+    images: ["https://images.unsplash.com/photo-1624958723474-a7eb2a0c2ae0?w=800&auto=format&fit=crop"],
+    price: 9900,
+    inStock: true,
+    features: ["4-Stage RO+UV+UF Purification", "iProtect Safety Monitoring", "6L Stainless Steel Tank", "15L/Hour Flow Rate", "Free Installation & 1-Year Warranty"],
+    createdAt: new Date().toISOString(),
+  },
+  {
     id: "prod_1",
     name: "AquaPure RO+UV Water Purifier",
     description: "Advanced 7-stage purification with UV sterilization. Perfect for homes with hard water, removes up to 99.9% impurities.",
